@@ -1,5 +1,7 @@
 # Find-LocalAdminAccess
-Check the Domain for local Admin Access via SMB, WMI, or PSRemoting
+Check the Domain for local Admin Access via SMB, WMI, or PSRemoting.
+
+Run as Current User, or provide credentials (WMI and PSRemoting only)
 
 Usage:
 
