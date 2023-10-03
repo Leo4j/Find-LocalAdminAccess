@@ -65,10 +65,34 @@ function Find-LocalAdminAccess {
 		$Computers = @()
         $objSearcher = New-Object System.DirectoryServices.DirectorySearcher
         $objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry
-        $objSearcher.Filter = "(&(sAMAccountType=805306369))"
+        $objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
         $objSearcher.PageSize = 1000
         $Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
     }
+	
+	$reachable_hosts = $null
+	$Tasks = $null
+	
+	if($Method -eq "WMI"){$PortScan = "135"}
+	elseif($Method -eq "SMB"){$PortScan = "445"}
+	elseif($Method -eq "PSRemoting"){$PortScan = "5985"}
+	
+	$reachable_hosts = @()
+	
+	$Tasks = $Computers | % {
+		$tcpClient = New-Object System.Net.Sockets.TcpClient
+		$asyncResult = $tcpClient.BeginConnect($_, $PortScan, $null, $null)
+		$wait = $asyncResult.AsyncWaitHandle.WaitOne(50)
+		if($wait) {
+			try{
+			$tcpClient.EndConnect($asyncResult)
+			$reachable_hosts += $_
+				} catch{}
+		}
+		$tcpClient.Close()
+	}
+	
+	$Computers = $reachable_hosts
 	
 	$Computers = $Computers | Where-Object { $_ -and $_.trim() }
 	$HostFQDN = [System.Net.Dns]::GetHostByName(($env:computerName)).HostName
