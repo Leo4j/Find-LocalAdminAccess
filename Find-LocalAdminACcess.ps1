@@ -124,7 +124,7 @@ function Find-LocalAdminAccess {
 		return $result
 	}
 
-    $runspacePool = [runspacefactory]::CreateRunspacePool(1, 5)  # Adjust numbers as needed
+    $runspacePool = [runspacefactory]::CreateRunspacePool(1, 10)
     $runspacePool.Open()
     $runspaces = New-Object System.Collections.ArrayList
 
