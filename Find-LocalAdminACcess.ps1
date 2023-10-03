@@ -138,7 +138,7 @@ function Find-LocalAdminAccess {
 			} elseif ($Method -eq "PSRemoting") {
 				Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction Stop
 			} elseif ($Method -eq "SMB") {
-				ls \\$Computer\c$ -ErrorAction Stop
+				ls \\$Computer\c$
 			}
 			$result.Success = $true
 		} catch {
