@@ -36,15 +36,15 @@ function Find-LocalAdminAccess {
 	
 	#>
 	
-    param (
-        [string]$ComputerNames,
-        [string]$ComputerFile,
+    	param (
+        	[string]$ComputerNames,
+        	[string]$ComputerFile,
 		[Parameter(Mandatory=$true)]
-        [string]$Method,
-        [string]$UserName,
-        [string]$Password,
+        	[string]$Method,
+        	[string]$UserName,
+        	[string]$Password,
 		[switch]$ShowErrors
-    )
+    	)
 	if(!$ShowErrors){
 		$ErrorActionPreference = "SilentlyContinue"
 		$WarningPreference = "SilentlyContinue"
@@ -52,30 +52,36 @@ function Find-LocalAdminAccess {
 	
 	Set-Variable MaximumHistoryCount 32767
 
-    if (($UserName -OR $Password) -AND ($Method -eq "SMB")) {
-        Write-Output "Please use Method WMI or PSRemoting if you need to run as a different user"
-        return
-    }
+    	if (($UserName -OR $Password) -AND ($Method -eq "SMB")) {
+        	Write-Output "Please use Method WMI or PSRemoting if you need to run as a different user"
+        	return
+    	}
 
-    if ($Computerfile) {
-        $Computers = Get-Content $Computerfile | Sort-Object -Unique
-    } elseif ($ComputerNames) {
-        $Computers = $ComputerNames -split "," | Sort-Object -Unique
-    } else {
+    	if ($Computerfile) {
+        	$Computers = Get-Content $Computerfile | Sort-Object -Unique
+    	} elseif ($ComputerNames) {
+        	$Computers = $ComputerNames -split "," | Sort-Object -Unique
+    	} else {
 		$Computers = @()
-        $objSearcher = New-Object System.DirectoryServices.DirectorySearcher
-        $objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry
-        $objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
-        $objSearcher.PageSize = 1000
-        $Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
-    }
+        	$objSearcher = New-Object System.DirectoryServices.DirectorySearcher
+        	$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry
+        	$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
+        	$objSearcher.PageSize = 1000
+        	$Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
+    	}
+
+    	$Computers = $Computers | Where-Object { $_ -and $_.trim() }
+	$HostFQDN = [System.Net.Dns]::GetHostByName(($env:computerName)).HostName
+	$TempHostname = $HostFQDN -replace '\..*', ''
+	$Computers = $Computers | Where-Object {$_ -ne "$HostFQDN"}
+	$Computers = $Computers | Where-Object {$_ -ne "$TempHostname"}
 	
 	$reachable_hosts = $null
 	$Tasks = $null
 	
-	if($Method -eq "WMI"){$PortScan = "135"}
-	elseif($Method -eq "SMB"){$PortScan = "445"}
-	elseif($Method -eq "PSRemoting"){$PortScan = "5985"}
+	if($Method -eq "WMI"){$PortScan = 135}
+	elseif($Method -eq "SMB"){$PortScan = 445}
+	elseif($Method -eq "PSRemoting"){$PortScan = 5985}
 	
 	$reachable_hosts = @()
 	
@@ -87,18 +93,12 @@ function Find-LocalAdminAccess {
 			try{
 			$tcpClient.EndConnect($asyncResult)
 			$reachable_hosts += $_
-				} catch{}
+			} catch{}
 		}
 		$tcpClient.Close()
 	}
 	
 	$Computers = $reachable_hosts
-	
-	$Computers = $Computers | Where-Object { $_ -and $_.trim() }
-	$HostFQDN = [System.Net.Dns]::GetHostByName(($env:computerName)).HostName
-	$TempHostname = $HostFQDN -replace '\..*', ''
-	$Computers = $Computers | Where-Object {$_ -ne "$HostFQDN"}
-	$Computers = $Computers | Where-Object {$_ -ne "$TempHostname"}
 	
 	if($UserName){
 		Write-Host ""
@@ -111,7 +111,7 @@ function Find-LocalAdminAccess {
 		Write-Host ""
 	}
 
-    $ScriptBlock = {
+    	$ScriptBlock = {
 		param (
 			$Computer,
 			$Method,
@@ -148,16 +148,16 @@ function Find-LocalAdminAccess {
 		return $result
 	}
 
-    $runspacePool = [runspacefactory]::CreateRunspacePool(1, 10)
-    $runspacePool.Open()
-    $runspaces = New-Object System.Collections.ArrayList
+    	$runspacePool = [runspacefactory]::CreateRunspacePool(1, 10)
+    	$runspacePool.Open()
+    	$runspaces = New-Object System.Collections.ArrayList
 
-    foreach ($Computer in $Computers) {
-        $runspace = [powershell]::Create().AddScript($ScriptBlock).AddArgument($Computer).AddArgument($Method).AddArgument($UserName).AddArgument($Password)
-        $runspace.RunspacePool = $runspacePool
-        $null = $runspaces.Add([PSCustomObject]@{
-            Pipe = $runspace
-            Status = $runspace.BeginInvoke()
+    	foreach ($Computer in $Computers) {
+        	$runspace = [powershell]::Create().AddScript($ScriptBlock).AddArgument($Computer).AddArgument($Method).AddArgument($UserName).AddArgument($Password)
+        	$runspace.RunspacePool = $runspacePool
+        	$null = $runspaces.Add([PSCustomObject]@{
+            	Pipe = $runspace
+            	Status = $runspace.BeginInvoke()
         })
     }
 
@@ -183,12 +183,12 @@ function Find-LocalAdminAccess {
     try {
         $ComputerAccess | Sort-Object | Out-File $PWD\LocalAdminAccess.txt -Force
         Write-Host ""
-		Write-Output "[+] Output saved to: $PWD\LocalAdminAccess.txt"
-		Write-Host ""
+	Write-Output "[+] Output saved to: $PWD\LocalAdminAccess.txt"
+	Write-Host ""
     } catch {
         $ComputerAccess | Sort-Object | Out-File "c:\Users\Public\Documents\LocalAdminAccess.txt" -Force
-		Write-Host ""
+	Write-Host ""
         Write-Output "[+] Output saved to: c:\Users\Public\Documents\LocalAdminAccess.txt"
-		Write-Host ""
+	Write-Host ""
     }
 }
