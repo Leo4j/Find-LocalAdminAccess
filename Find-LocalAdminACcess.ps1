@@ -122,30 +122,25 @@ function Find-LocalAdminAccess {
 		$SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 		$cred = New-Object System.Management.Automation.PSCredential($UserName, $SecPassword)
 		
-		$result = @{
-			Computer = $Computer
-			Success  = $false
-			Message  = ""
-		}
+		$Error.Clear()
 
-		try {
-			if ($UserName -AND $Password -AND ($Method -eq "WMI")) {
-				Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction Stop -Credential $cred
-			} elseif ($UserName -AND $Password -AND ($Method -eq "PSRemoting")) {
-				Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction Stop -Credential $cred
-			} elseif ($Method -eq "WMI") {
-				Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction Stop
-			} elseif ($Method -eq "PSRemoting") {
-				Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction Stop
-			} elseif ($Method -eq "SMB") {
-				ls \\$Computer\c$
+		if ($UserName -AND $Password -AND ($Method -eq "WMI")) {Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction Stop -Credential $cred}
+  		elseif ($UserName -AND $Password -AND ($Method -eq "PSRemoting")) {Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction Stop -Credential $cred}
+    		elseif ($Method -eq "WMI") {Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction Stop}
+      		elseif ($Method -eq "PSRemoting") {Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction Stop}
+		elseif ($Method -eq "SMB") {ls \\$Computer\c$ -ErrorAction Stop}
+		if($error[0] -eq $null) {
+			return @{
+		    	Computer = $Computer
+		    	Success  = $true
 			}
-			$result.Success = $true
-		} catch {
-			$result.Message = $_.Exception.Message
-		}
-
-		return $result
+	    	} else {
+			return @{
+		    	Computer = $Computer
+		    	Success  = $false
+		    	Message  = $error[0].ToString()
+			}
+	    	}
 	}
 
     	$runspacePool = [runspacefactory]::CreateRunspacePool(1, 10)
@@ -156,12 +151,12 @@ function Find-LocalAdminAccess {
         	$runspace = [powershell]::Create().AddScript($ScriptBlock).AddArgument($Computer).AddArgument($Method).AddArgument($UserName).AddArgument($Password)
         	$runspace.RunspacePool = $runspacePool
         	$null = $runspaces.Add([PSCustomObject]@{
-            	Pipe = $runspace
-            	Status = $runspace.BeginInvoke()
-        })
-    }
+            		Pipe = $runspace
+            		Status = $runspace.BeginInvoke()
+        	})
+    	}
 
-    $ComputerAccess = @()
+    	$ComputerAccess = @()
 	foreach ($run in $runspaces) {
 		$result = $run.Pipe.EndInvoke($run.Status)
 		if ($result.Success) {
@@ -171,24 +166,24 @@ function Find-LocalAdminAccess {
 		}
 	}
 
-    $runspaces | ForEach-Object {
-        $_.Pipe.Dispose()
-    }
+    	$runspaces | ForEach-Object {
+        	$_.Pipe.Dispose()
+    	}
 
-    $runspacePool.Close()
-    $runspacePool.Dispose()
+    	$runspacePool.Close()
+    	$runspacePool.Dispose()
 
-    $ComputerAccess | Sort-Object | ForEach-Object { Write-Output $_ }
+    	$ComputerAccess | Sort-Object | ForEach-Object { Write-Output $_ }
 
-    try {
-        $ComputerAccess | Sort-Object | Out-File $PWD\LocalAdminAccess.txt -Force
-        Write-Host ""
-	Write-Output "[+] Output saved to: $PWD\LocalAdminAccess.txt"
-	Write-Host ""
-    } catch {
-        $ComputerAccess | Sort-Object | Out-File "c:\Users\Public\Documents\LocalAdminAccess.txt" -Force
-	Write-Host ""
-        Write-Output "[+] Output saved to: c:\Users\Public\Documents\LocalAdminAccess.txt"
-	Write-Host ""
-    }
+    	try {
+        	$ComputerAccess | Sort-Object | Out-File $PWD\LocalAdminAccess.txt -Force
+        	Write-Host ""
+		Write-Output "[+] Output saved to: $PWD\LocalAdminAccess.txt"
+		Write-Host ""
+    	} catch {
+        	$ComputerAccess | Sort-Object | Out-File "c:\Users\Public\Documents\LocalAdminAccess.txt" -Force
+		Write-Host ""
+        	Write-Output "[+] Output saved to: c:\Users\Public\Documents\LocalAdminAccess.txt"
+		Write-Host ""
+    	}
 }
