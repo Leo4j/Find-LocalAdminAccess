@@ -51,6 +51,8 @@ function Find-LocalAdminAccess {
 	}
 	
 	Set-Variable MaximumHistoryCount 32767
+	
+	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
     	if (($UserName -OR $Password) -AND ($Method -eq "SMB")) {
         	Write-Output "Please use Method WMI or PSRemoting if you need to run as a different user"
@@ -76,29 +78,51 @@ function Find-LocalAdminAccess {
 	$Computers = $Computers | Where-Object {$_ -ne "$HostFQDN"}
 	$Computers = $Computers | Where-Object {$_ -ne "$TempHostname"}
 	
-	$reachable_hosts = $null
-	$Tasks = $null
-	
 	if($Method -eq "WMI"){$PortScan = 135}
 	elseif($Method -eq "SMB"){$PortScan = 445}
 	elseif($Method -eq "PSRemoting"){$PortScan = 5985}
 	
-	$reachable_hosts = @()
-	
-	$Tasks = $Computers | % {
+	$runspacePool = [runspacefactory]::CreateRunspacePool(1, [Environment]::ProcessorCount)
+	$runspacePool.Open()
+
+	$scriptBlock = {
+		param ($computer, $port)
 		$tcpClient = New-Object System.Net.Sockets.TcpClient
-		$asyncResult = $tcpClient.BeginConnect($_, $PortScan, $null, $null)
+		$asyncResult = $tcpClient.BeginConnect($computer, $port, $null, $null)
 		$wait = $asyncResult.AsyncWaitHandle.WaitOne(50)
-		if($wait) {
-			try{
-			$tcpClient.EndConnect($asyncResult)
-			$reachable_hosts += $_
-			} catch{}
+		if ($wait) {
+			try {
+				$tcpClient.EndConnect($asyncResult)
+				return $computer
+			} catch {}
 		}
 		$tcpClient.Close()
+		return $null
 	}
-	
+
+	$runspaces = New-Object 'System.Collections.Generic.List[System.Object]'
+
+	foreach ($computer in $Computers) {
+		$powerShellInstance = [powershell]::Create().AddScript($scriptBlock).AddArgument($computer).AddArgument($PortScan)
+		$powerShellInstance.RunspacePool = $runspacePool
+		$runspaces.Add([PSCustomObject]@{
+			Instance = $powerShellInstance
+			Status   = $powerShellInstance.BeginInvoke()
+		})
+	}
+
+	$reachable_hosts = @()
+	foreach ($runspace in $runspaces) {
+		$result = $runspace.Instance.EndInvoke($runspace.Status)
+		if ($result) {
+			$reachable_hosts += $result
+		}
+	}
+
 	$Computers = $reachable_hosts
+
+	$runspacePool.Close()
+	$runspacePool.Dispose()
 	
 	if($UserName){
 		Write-Host ""
@@ -157,14 +181,14 @@ function Find-LocalAdminAccess {
     	}
 
     	$ComputerAccess = @()
-	foreach ($run in $runspaces) {
-		$result = $run.Pipe.EndInvoke($run.Status)
-		if ($result.Success) {
-			$ComputerAccess += $result.Computer
-		} else {
-			Write-Warning "[-] Failed on $($result.Computer): $($result.Message)"
+		foreach ($run in $runspaces) {
+			$result = $run.Pipe.EndInvoke($run.Status)
+			if ($result.Success) {
+				$ComputerAccess += $result.Computer
+			} else {
+				Write-Warning "[-] Failed on $($result.Computer): $($result.Message)"
+			}
 		}
-	}
 
     	$runspaces | ForEach-Object {
         	$_.Pipe.Dispose()
@@ -174,6 +198,12 @@ function Find-LocalAdminAccess {
     	$runspacePool.Dispose()
 
     	$ComputerAccess | Sort-Object | ForEach-Object { Write-Output $_ }
+		
+		# Display elapsed time
+		$stopwatch.Stop()
+		$elapsedTime = $stopwatch.Elapsed
+		Write-Host ""
+		Write-Host "Elapsed time: $($elapsedTime.Hours):$($elapsedTime.Minutes):$($elapsedTime.Seconds).$($elapsedTime.Milliseconds)"
 
     	try {
         	$ComputerAccess | Sort-Object | Out-File $PWD\LocalAdminAccess.txt -Force
