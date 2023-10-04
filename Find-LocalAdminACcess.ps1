@@ -82,7 +82,7 @@ function Find-LocalAdminAccess {
 	elseif($Method -eq "SMB"){$PortScan = 445}
 	elseif($Method -eq "PSRemoting"){$PortScan = 5985}
 	
-	$runspacePool = [runspacefactory]::CreateRunspacePool(1, [Environment]::ProcessorCount)
+	$runspacePool = [runspacefactory]::CreateRunspacePool(1, 10)
 	$runspacePool.Open()
 
 	$scriptBlock = {
