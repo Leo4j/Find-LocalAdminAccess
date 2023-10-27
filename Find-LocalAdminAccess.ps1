@@ -9,11 +9,8 @@ function Find-LocalAdminAccess {
 	.DESCRIPTION
 	Check the Domain for local Admin Access
 	
-	.PARAMETER ComputerNames
-	Provide a single target or comma-separated targets
-	
-	.PARAMETER ComputerFile
-	Provide a file containing targets (one per line)
+	.PARAMETER Targets
+	Specify a comma-separated list of targets, or the path to a file containing targets (one per line)
 	
 	.PARAMETER Method
 	Provide a method to check for Admin Access (SMB, WMI, PSRemoting)
@@ -26,6 +23,9 @@ function Find-LocalAdminAccess {
 	
 	.PARAMETER ShowErrors
 	Show Errors
+
+ 	.PARAMETER SaveOutput
+	Save tool output
 	
 	.EXAMPLE
 	Find-LocalAdminAccess -Method SMB
@@ -37,13 +37,13 @@ function Find-LocalAdminAccess {
 	#>
 	
     	param (
-        	[string]$ComputerNames,
-        	[string]$ComputerFile,
+        	[string]$Targets,
 		[Parameter(Mandatory=$true)]
         	[string]$Method,
         	[string]$UserName,
         	[string]$Password,
-		[switch]$ShowErrors
+		[switch]$ShowErrors,
+  		[switch]$SaveOutput
     	)
 	if(!$ShowErrors){
 		$ErrorActionPreference = "SilentlyContinue"
@@ -51,18 +51,25 @@ function Find-LocalAdminAccess {
 	}
 	
 	Set-Variable MaximumHistoryCount 32767
-	
-	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
     	if (($UserName -OR $Password) -AND ($Method -eq "SMB")) {
         	Write-Output "Please use Method WMI or PSRemoting if you need to run as a different user"
         	return
     	}
 
-    	if ($Computerfile) {
-        	$Computers = Get-Content $Computerfile | Sort-Object -Unique
-    	} elseif ($ComputerNames) {
-        	$Computers = $ComputerNames -split "," | Sort-Object -Unique
+    	if ($Targets) {
+     		$TestPath = Test-Path $Targets
+		
+		if($TestPath){
+			$Computers = Get-Content -Path $Targets
+			$Computers = $Computers | Sort-Object -Unique
+		}
+		
+		else{
+			$Computers = $Targets
+			$Computers = $Computers -split ","
+			$Computers = $Computers | Sort-Object -Unique
+		}
     	} else {
 		$Computers = @()
         	$objSearcher = New-Object System.DirectoryServices.DirectorySearcher
@@ -199,21 +206,17 @@ function Find-LocalAdminAccess {
 
     	$ComputerAccess | Sort-Object | ForEach-Object { Write-Output $_ }
 		
-		# Display elapsed time
-		$stopwatch.Stop()
-		$elapsedTime = $stopwatch.Elapsed
-		Write-Host ""
-		Write-Host "Elapsed time: $($elapsedTime.Hours):$($elapsedTime.Minutes):$($elapsedTime.Seconds).$($elapsedTime.Milliseconds)"
-
-    	try {
-        	$ComputerAccess | Sort-Object | Out-File $PWD\LocalAdminAccess.txt -Force
-        	Write-Host ""
-		Write-Output "[+] Output saved to: $PWD\LocalAdminAccess.txt"
-		Write-Host ""
-    	} catch {
-        	$ComputerAccess | Sort-Object | Out-File "c:\Users\Public\Documents\LocalAdminAccess.txt" -Force
-		Write-Host ""
-        	Write-Output "[+] Output saved to: c:\Users\Public\Documents\LocalAdminAccess.txt"
-		Write-Host ""
-    	}
+	if($SaveOutput){
+	    	try {
+	        	$ComputerAccess | Sort-Object | Out-File $PWD\LocalAdminAccess.txt -Force
+	        	Write-Host ""
+			Write-Output "[+] Output saved to: $PWD\LocalAdminAccess.txt"
+			Write-Host ""
+	    	} catch {
+	        	$ComputerAccess | Sort-Object | Out-File "c:\Users\Public\Documents\LocalAdminAccess.txt" -Force
+			Write-Host ""
+	        	Write-Output "[+] Output saved to: c:\Users\Public\Documents\LocalAdminAccess.txt"
+			Write-Host ""
+	    	}
+	}
 }
