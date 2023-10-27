@@ -204,7 +204,8 @@ function Find-LocalAdminAccess {
     	$runspacePool.Close()
     	$runspacePool.Dispose()
 
-    	$ComputerAccess | Sort-Object | ForEach-Object { Write-Output $_ }
+ 	if($ComputerAccess){$ComputerAccess | Sort-Object | ForEach-Object { Write-Output $_ }}
+  	else{Write-Output "[-] No Access"}
 		
 	if($SaveOutput){
 	    	try {
