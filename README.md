@@ -18,10 +18,10 @@ Find-LocalAdminAccess -Method WMI
 Find-LocalAdminAccess -Method PSRemoting
 ```
 ```
-Find-LocalAdminAccess -Method WMI -ComputerNames "Workstation01.ferrari.local,DC01.ferrari.local"
+Find-LocalAdminAccess -Method WMI -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
 ```
 ```
-Find-LocalAdminAccess -Method PSRemoting -ComputerFile c:\Users\Public\Documents\Targets.txt
+Find-LocalAdminAccess -Method PSRemoting -Targets c:\Users\Public\Documents\Targets.txt
 ```
 ```
 Find-LocalAdminAccess -Method WMI -UserName "ferrari\Administrator" -Password "P@ssw0rd!"
