@@ -6,7 +6,7 @@ Run as Current User, or provide credentials (WMI and PSRemoting only)
 Usage:
 
 ```
-iex(new-object net.webclient).downloadstring('https://raw.githubusercontent.com/Leo4j/Find-LocalAdminAccess/main/Find-LocalAdminACcess.ps1')
+iex(new-object net.webclient).downloadstring('https://raw.githubusercontent.com/Leo4j/Find-LocalAdminAccess/main/Find-LocalAdminAccess.ps1')
 ```
 ```
 Find-LocalAdminAccess -Method SMB
