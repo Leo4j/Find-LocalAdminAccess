@@ -139,14 +139,14 @@ function Find-LocalAdminAccess {
 	$runspacePool.Dispose()
 	
 	if($UserName){
-		Write-Host ""
-		Write-Host "[+] $UserName has Local Admin access on:" -ForegroundColor Yellow
-		Write-Host ""
+		Write-Output ""
+		Write-Output "[+] $UserName has Local Admin access on:"
+		Write-Output ""
 	}
 	else{
-		Write-Host ""
-		Write-Host "[+] The current user has Local Admin access on:" -ForegroundColor Yellow
-		Write-Host ""
+		Write-Output ""
+		Write-Output "[+] The current user has Local Admin access on:"
+		Write-Output ""
 	}
 
     	$ScriptBlock = {
@@ -217,14 +217,14 @@ function Find-LocalAdminAccess {
 	if($SaveOutput){
 	    	try {
 	        	$ComputerAccess | Sort-Object | Out-File $PWD\LocalAdminAccess.txt -Force
-	        	Write-Host ""
+	        	Write-Output ""
 			Write-Output "[+] Output saved to: $PWD\LocalAdminAccess.txt"
-			Write-Host ""
+			Write-Output ""
 	    	} catch {
 	        	$ComputerAccess | Sort-Object | Out-File "c:\Users\Public\Documents\LocalAdminAccess.txt" -Force
-			Write-Host ""
+			Write-Output ""
 	        	Write-Output "[+] Output saved to: c:\Users\Public\Documents\LocalAdminAccess.txt"
-			Write-Host ""
+			Write-Output ""
 	    	}
 	} else {Write-Output ""}
 
@@ -275,7 +275,7 @@ function Find-LocalAdminAccess {
 				}
 				elseif ($Method -eq 'SMB') {
 					. ([ScriptBlock]::Create($SmbScript))
-					$output = Enter-SMBSession -ComputerName $Computer -Command $Command
+					$output = Invoke-SMBRemoting -ComputerName $Computer -Command $Command
 				}
 
 				return @{
