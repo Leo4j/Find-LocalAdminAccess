@@ -1,7 +1,9 @@
 # Find-LocalAdminAccess
-Check the Domain for local Admin Access via SMB, WMI, or PSRemoting.
+Check the Domain for local Admin Access via SMB, WMI, or PSRemoting. 
 
 Run as Current User, or provide credentials (WMI and PSRemoting only)
+
+Optionally, provide a command to run on targets where we are Admin
 
 Usage:
 
@@ -12,10 +14,28 @@ iex(new-object net.webclient).downloadstring('https://raw.githubusercontent.com/
 Find-LocalAdminAccess -Method SMB
 ```
 ```
+Find-LocalAdminAccess -Method SMB -Command 'whoami /all' # Will run a command on targets where we are admin
+```
+```
+Find-LocalAdminAccess -Method SMB -Command 'whoami /all' -NoOutput # Will run a command on targets where we are admin and won't wait for output
+```
+```
 Find-LocalAdminAccess -Method WMI
 ```
 ```
+Find-LocalAdminAccess -Method WMI -Command 'whoami /all' # Will run a command on targets where we are admin
+```
+```
+Find-LocalAdminAccess -Method WMI -Command 'whoami /all' -NoOutput # Will run a command on targets where we are admin and won't wait for output
+```
+```
 Find-LocalAdminAccess -Method PSRemoting
+```
+```
+Find-LocalAdminAccess -Method PSRemoting -Command 'whoami /all' # Will run a command on targets where we are admin
+```
+```
+Find-LocalAdminAccess -Method PSRemoting -Command 'whoami /all' -NoOutput # Will run a command on targets where we are admin and won't wait for output
 ```
 ```
 Find-LocalAdminAccess -Method WMI -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
