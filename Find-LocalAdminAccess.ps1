@@ -27,9 +27,6 @@ function Find-LocalAdminAccess {
 	.PARAMETER NoOutput
 	Won't wait for the command to complete and won't show output
 	
-	.PARAMETER NoOutput
-	Won't wait for the command to complete and won't show output
-	
 	.PARAMETER scsafe
 	Safe sc operations when method SMB is used
 
