@@ -58,7 +58,7 @@ function Find-LocalAdminAccess {
   		[switch]$SaveOutput
     	)
 	if(!$ShowErrors){
-		#$ErrorActionPreference = "SilentlyContinue"
+		$ErrorActionPreference = "SilentlyContinue"
 		$WarningPreference = "SilentlyContinue"
 	}
 	
