@@ -268,6 +268,7 @@ function Find-LocalAdminAccess {
 			try {
 				if ($Method -eq 'PSRemoting') {
 					if ($cred) {
+						$command = $command + " | Out-String -Width 4096"
 						$output = Invoke-Command -ScriptBlock { Invoke-Expression $Using:Command } -ComputerName $Computer -Credential $cred
 					}
 					else {
