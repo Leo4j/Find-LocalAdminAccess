@@ -86,6 +86,7 @@ function Find-LocalAdminAccess {
         	$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
         	$objSearcher.PageSize = 1000
         	$Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
+			$Computers = $Computers | Sort-Object -Unique
     	}
 
     	$Computers = $Computers | Where-Object { $_ -and $_.trim() }
@@ -136,6 +137,8 @@ function Find-LocalAdminAccess {
 	}
 
 	$Computers = $reachable_hosts
+	
+	#$Computers = $Computers | Sort-Object -Unique
 
 	$runspacePool.Close()
 	$runspacePool.Dispose()
@@ -176,13 +179,13 @@ function Find-LocalAdminAccess {
 		    	Computer = $Computer
 		    	Success  = $true
 			}
-	    	} else {
+	    } else {
 			return @{
 		    	Computer = $Computer
 		    	Success  = $false
 		    	Message  = $error[0].ToString()
 			}
-	    	}
+	    }
 	}
 
     	$runspacePool = [runspacefactory]::CreateRunspacePool(1, 10)
@@ -217,7 +220,7 @@ function Find-LocalAdminAccess {
     	$runspacePool.Close()
     	$runspacePool.Dispose()
 
- 	$ComputerAccess = $ComputerAccess | Sort-Object -Unique
+ 	#$ComputerAccess = $ComputerAccess | Sort-Object -Unique
 	
 	if($ComputerAccess){$ComputerAccess | ForEach-Object { Write-Output $_ }}
   	else{Write-Output "[-] No Access"}
@@ -237,8 +240,6 @@ function Find-LocalAdminAccess {
 	} else {Write-Output ""}
 	
 	if ($Command) {
-		
-		$ComputerAccess = $ComputerAccess
 
 		if ($UserName -and $Password) {
 			$SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
