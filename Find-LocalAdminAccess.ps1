@@ -159,16 +159,18 @@ function Find-LocalAdminAccess {
 			$Password
 		)
 		
-		$SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
-		$cred = New-Object System.Management.Automation.PSCredential($UserName, $SecPassword)
+		if($UserName -AND $Password){
+			$SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
+			$cred = New-Object System.Management.Automation.PSCredential($UserName, $SecPassword)
+		}
 		
 		$Error.Clear()
 
-		if ($UserName -AND $Password -AND ($Method -eq "WMI")) {Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction Stop -Credential $cred}
-  		elseif ($UserName -AND $Password -AND ($Method -eq "PSRemoting")) {Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction Stop -Credential $cred}
-    		elseif ($Method -eq "WMI") {Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction Stop}
-      		elseif ($Method -eq "PSRemoting") {Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction Stop}
-		elseif ($Method -eq "SMB") {ls \\$Computer\c$ -ErrorAction Stop}
+		if ($UserName -AND $Password -AND ($Method -eq "WMI")) {Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction SilentlyContinue -Credential $cred}
+  		elseif ($UserName -AND $Password -AND ($Method -eq "PSRemoting")) {Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction SilentlyContinue -Credential $cred}
+    		elseif ($Method -eq "WMI") {Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction SilentlyContinue}
+      		elseif ($Method -eq "PSRemoting") {Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction SilentlyContinue}
+		elseif ($Method -eq "SMB") {ls \\$Computer\c$ -ErrorAction SilentlyContinue}
 		if($error[0] -eq $null) {
 			return @{
 		    	Computer = $Computer
@@ -198,7 +200,9 @@ function Find-LocalAdminAccess {
 
     	$ComputerAccess = @()
 		foreach ($run in $runspaces) {
-			$result = $run.Pipe.EndInvoke($run.Status)
+			try {
+				$result = $run.Pipe.EndInvoke($run.Status)
+			} catch {}
 			if ($result.Success) {
 				$ComputerAccess += $result.Computer
 			} else {
@@ -213,17 +217,19 @@ function Find-LocalAdminAccess {
     	$runspacePool.Close()
     	$runspacePool.Dispose()
 
- 	if($ComputerAccess){$ComputerAccess | Sort-Object | ForEach-Object { Write-Output $_ }}
+ 	$ComputerAccess = $ComputerAccess | Sort-Object -Unique
+	
+	if($ComputerAccess){$ComputerAccess | ForEach-Object { Write-Output $_ }}
   	else{Write-Output "[-] No Access"}
 		
 	if($SaveOutput){
 	    	try {
-	        	$ComputerAccess | Sort-Object | Out-File $PWD\LocalAdminAccess.txt -Force
+	        	$ComputerAccess | Out-File $PWD\LocalAdminAccess.txt -Force
 	        	Write-Output ""
 			Write-Output "[+] Output saved to: $PWD\LocalAdminAccess.txt"
 			Write-Output ""
 	    	} catch {
-	        	$ComputerAccess | Sort-Object | Out-File "c:\Users\Public\Documents\LocalAdminAccess.txt" -Force
+	        	$ComputerAccess | Out-File "c:\Users\Public\Documents\LocalAdminAccess.txt" -Force
 			Write-Output ""
 	        	Write-Output "[+] Output saved to: c:\Users\Public\Documents\LocalAdminAccess.txt"
 			Write-Output ""
@@ -232,7 +238,7 @@ function Find-LocalAdminAccess {
 	
 	if ($Command) {
 		
-		$ComputerAccess = $ComputerAccess | Sort-Object
+		$ComputerAccess = $ComputerAccess
 
 		if ($UserName -and $Password) {
 			$SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
