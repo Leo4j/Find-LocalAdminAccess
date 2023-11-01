@@ -48,11 +48,12 @@ function Find-LocalAdminAccess {
         	[string]$Method,
         	[string]$UserName,
         	[string]$Password,
-			[string]$Command,
+		[string]$Command,
 		[switch]$ShowErrors,
 		[switch]$scsafe,
 		[switch]$NoOutput,
-  		[switch]$SaveOutput
+  		[switch]$SaveOutput,
+    		[switch]$InLine
     	)
 	if(!$ShowErrors){
 		$ErrorActionPreference = "SilentlyContinue"
@@ -222,7 +223,11 @@ function Find-LocalAdminAccess {
 
  	#$ComputerAccess = $ComputerAccess | Sort-Object -Unique
 	
-	if($ComputerAccess){$ComputerAccess | ForEach-Object { Write-Output $_ }}
+	if($ComputerAccess){
+		$ComputerAccess = $ComputerAccess | Where-Object { $_ }
+		if($InLine){$ComputerAccess = $ComputerAccess -Join ",";Write-Output $ComputerAccess}
+		else{$ComputerAccess | ForEach-Object { Write-Output $_ }}
+	}
   	else{Write-Output "[-] No Access"}
 		
 	if($SaveOutput){
