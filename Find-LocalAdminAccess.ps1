@@ -225,7 +225,7 @@ function Find-LocalAdminAccess {
 	
 	if($ComputerAccess){
 		$ComputerAccess = $ComputerAccess | Where-Object { $_ }
-		if($InLine){$ComputerAccess = $ComputerAccess -Join ",";Write-Output $ComputerAccess}
+		if($InLine){$LineComputerAccess = $ComputerAccess;$LineComputerAccess = $LineComputerAccess -Join ",";Write-Output $LineComputerAccess}
 		else{$ComputerAccess | ForEach-Object { Write-Output $_ }}
 	}
   	else{Write-Output "[-] No Access"}
