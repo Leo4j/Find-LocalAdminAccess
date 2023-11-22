@@ -20,6 +20,12 @@ function Find-LocalAdminAccess {
 	
 	.PARAMETER Password
 	Password for the UserName (Works with WMI and PSRemoting only)
+
+ 	.PARAMETER Domain
+	Specify the target Domain
+
+ 	.PARAMETER DomainController
+	Specify the target DomainController
 	
 	.PARAMETER Command
 	Command to execute on targets where we are admin (Works for all methods if Credentials are not provided, otherwise WMI and PSRemoting only)
@@ -83,11 +89,20 @@ function Find-LocalAdminAccess {
     	} else {
 		$Computers = @()
         	$objSearcher = New-Object System.DirectoryServices.DirectorySearcher
-        	$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry
+			if($Domain){
+				if($DomainController){
+					$TempDomainName = "DC=" + $Domain.Split(".")
+					$domainDN = $TempDomainName -replace " ", ",DC="
+					$ldapPath = "LDAP://$DomainController/$domainDN"
+					$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry($ldapPath)
+				}
+				else{$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$Domain")}
+			}
+			else{$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry}
         	$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
         	$objSearcher.PageSize = 1000
         	$Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
-			$Computers = $Computers | Sort-Object -Unique
+		$Computers = $Computers | Sort-Object -Unique
     	}
 
     	$Computers = $Computers | Where-Object { $_ -and $_.trim() }
