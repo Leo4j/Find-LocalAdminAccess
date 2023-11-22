@@ -16,6 +16,9 @@ iex(new-object net.webclient).downloadstring('https://raw.githubusercontent.com/
 Find-LocalAdminAccess -Method SMB
 ```
 ```
+Find-LocalAdminAccess -Method SMB -Domain ferrari.local -DomainController DC01.ferrari.local
+```
+```
 Find-LocalAdminAccess -Method SMB -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
 ```
 ```
@@ -31,6 +34,9 @@ Find-LocalAdminAccess -Method SMB -Targets "Workstation01.ferrari.local,DC01.fer
 ### Usage (WMI):
 ```
 Find-LocalAdminAccess -Method WMI
+```
+```
+Find-LocalAdminAccess -Method WMI -Domain ferrari.local -DomainController DC01.ferrari.local
 ```
 ```
 Find-LocalAdminAccess -Method WMI -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
@@ -51,6 +57,9 @@ Find-LocalAdminAccess -Method WMI -Targets "Workstation01.ferrari.local,DC01.fer
 ### Usage (PSRemoting):
 ```
 Find-LocalAdminAccess -Method PSRemoting
+```
+```
+Find-LocalAdminAccess -Method PSRemoting -Domain ferrari.local -DomainController DC01.ferrari.local
 ```
 ```
 Find-LocalAdminAccess -Method PSRemoting -Targets c:\Users\Public\Documents\Targets.txt
