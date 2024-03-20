@@ -1,9 +1,24 @@
 # Find-LocalAdminAccess
-Check the Domain for local Admin Access via SMB, WMI, or PSRemoting. 
+Check the Domain for local Admin Access via SMB, WMI, or PSRemoting.
+
+## Light Version
+
+```
+iex(new-object net.webclient).downloadstring('https://raw.githubusercontent.com/Leo4j/Find-LocalAdminAccess/main/Find-LocalAdminAccess_Light.ps1')
+```
+```
+Find-LocalAdminAccess
+```
+```
+Find-LocalAdminAccess -Domain ferrari.local -DomainController DC01.ferrari.local -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
+```
+![image](https://github.com/Leo4j/Find-LocalAdminAccess/assets/61951374/3e0cfabe-694b-4361-82b1-9d3b322b0949)
+
+## Full Version
 
 Run as Current User, or provide credentials (WMI and PSRemoting only)
 
-Optionally, provide a command to run on targets where we are Admin
+Optionally, provide a command to run on targets where you have Admin access
 
 ### Load script:
 
