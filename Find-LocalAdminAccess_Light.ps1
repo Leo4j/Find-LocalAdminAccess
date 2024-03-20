@@ -4,11 +4,26 @@ function Find-LocalAdminAccess {
 	.SYNOPSIS
 	Find-LocalAdminAccess Author: Rob LP (@L3o4j)
 	https://github.com/Leo4j/Find-LocalAdminAccess
+
+ 	.DESCRIPTION
+	Check the Domain for local Admin Access
+	
+	.PARAMETER Targets
+	Specify a comma-separated list of targets, or the path to a file containing targets (one per line)
+	
+	.PARAMETER Domain
+	Specify the target Domain
+
+ 	.PARAMETER DomainController
+	Specify the target DomainController
+	
+	.EXAMPLE
+	Find-LocalAdminAccess
+	Find-LocalAdminAccess -Domain ferrari.local -DomainController DC01.ferrari.local -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
  	#>
 	
 	param (
 		[string]$Targets,
-		[string]$Command,
 		[string]$Domain,
 		[string]$DomainController,
 		[switch]$ShowErrors
