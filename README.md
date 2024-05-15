@@ -10,9 +10,13 @@ iex(new-object net.webclient).downloadstring('https://raw.githubusercontent.com/
 Find-LocalAdminAccess
 ```
 ```
+Find-LocalAdminAccess -Local -Username "Administrator" -Password "P@ssw0rd!"
+```
+```
 Find-LocalAdminAccess -Domain ferrari.local -DomainController DC01.ferrari.local -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
 ```
-![image](https://github.com/Leo4j/Find-LocalAdminAccess/assets/61951374/3e0cfabe-694b-4361-82b1-9d3b322b0949)
+![image](https://github.com/Leo4j/Find-LocalAdminAccess/assets/61951374/73705a97-5f67-446f-982d-f779421fc97b)
+
 
 ## Full Version
 
