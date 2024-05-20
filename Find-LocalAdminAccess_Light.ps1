@@ -69,8 +69,14 @@ function Find-LocalAdminAccess {
 		}
 	} else {
 		$Computers = @()
-		$objSearcher = New-Object System.DirectoryServices.DirectorySearcher
-		if ($Domain) {
+		
+		if ($Domain){
+			Write-Output ""
+			Write-Output "[+] Scope: $Domain"
+			Write-Output ""
+			Write-Output "[+] Enumerating Targets..."
+			Write-Output ""
+			$objSearcher = New-Object System.DirectoryServices.DirectorySearcher
 			if ($DomainController) {
 				$TempDomainName = "DC=" + ($Domain.Split(".") -join ",DC=")
 				$ldapPath = "LDAP://$DomainController/$TempDomainName"
@@ -78,19 +84,110 @@ function Find-LocalAdminAccess {
 			} else {
 				$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$Domain")
 			}
-		} else {
-			$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry
+			$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
+			$objSearcher.PageSize = 1000
+			$Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
+			$Computers = $Computers | Sort-Object -Unique
 		}
-		$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
-		$objSearcher.PageSize = 1000
-		$Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
-		$Computers = $Computers | Sort-Object -Unique
+		
+		else{
+			# All Domains
+			$FindCurrentDomain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+			if(!$FindCurrentDomain){$FindCurrentDomain = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName.Trim()}
+			if(!$FindCurrentDomain){$FindCurrentDomain = $env:USERDNSDOMAIN}
+			if(!$FindCurrentDomain){$FindCurrentDomain = Get-WmiObject -Namespace root\cimv2 -Class Win32_ComputerSystem | Select Domain | Format-Table -HideTableHeaders | out-string | ForEach-Object { $_.Trim() }}
+			
+			$ParentDomain = ($FindCurrentDomain | Select-Object -ExpandProperty Forest | Select-Object -ExpandProperty Name)
+			$DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext('Domain', $ParentDomain)
+			$ChildContext = [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DomainContext)
+			$ChildDomains = @($ChildContext | Select-Object -ExpandProperty Children | Select-Object -ExpandProperty Name)
+			
+			$AllDomains = @($ParentDomain)
+			
+			if($ChildDomains){
+				foreach($ChildDomain in $ChildDomains){
+					$AllDomains += $ChildDomain
+				}
+			}
+			
+			# Trust Domains (save to variable)
+			
+			$TrustTargetNames = @(foreach($AllDomain in $AllDomains){(FindDomainTrusts -Domain $AllDomain).TargetName})
+			$TrustTargetNames = $TrustTargetNames | Sort-Object -Unique
+			$TrustTargetNames = $TrustTargetNames | Where-Object { $_ -notin $AllDomains }
+			
+			# Remove Outbound Trust from $AllDomains
+			
+			$OutboundTrusts = @(foreach($AllDomain in $AllDomains){FindDomainTrusts -Domain $AllDomain | Where-Object { $_.TrustDirection -eq 'Outbound' } | Select-Object -ExpandProperty TargetName})
+			
+			foreach($TrustTargetName in $TrustTargetNames){
+				$AllDomains += $TrustTargetName
+			}
+			
+			$AllDomains = $AllDomains | Sort-Object -Unique
+			
+			$PlaceHolderDomains = $AllDomains
+			$AllDomains = $AllDomains | Where-Object { $_ -notin $OutboundTrusts }
+			
+			if($Exclude){
+				$ExcludeDomains = @($Exclude -split ',')
+				$AllDomains = $AllDomains | Where-Object { $_ -notin $ExcludeDomains }
+			}
+			
+			### Remove Unreachable domains
+
+			$ReachableDomains = $AllDomains
+
+			foreach($AllDomain in $AllDomains){
+				$ReachableResult = $null
+				$DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext('Domain', $AllDomain)
+				$ReachableResult = [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DomainContext)
+				if($ReachableResult){}
+				else{$ReachableDomains = $ReachableDomains | Where-Object { $_ -ne $AllDomain }}
+			}
+
+			$AllDomains = $ReachableDomains
+			
+			if($AllDomains -eq $null){
+				Write-Host ""
+				Write-Host " [-] No Domains in scope" -ForegroundColor Red
+				Write-Host ""
+				break
+			}
+			
+			Write-Output ""
+			Write-Output "[+] Scope:"
+			foreach($AllDomain in $AllDomains){
+				Write-Output "$AllDomain"
+			}
+			Write-Output ""
+			Write-Output "[+] Enumerating Targets..."
+			Write-Output ""
+			
+			foreach($AllDomain in $AllDomains){
+				$objSearcher = New-Object System.DirectoryServices.DirectorySearcher
+				if ($DomainController) {
+					$TempDomainName = "DC=" + ($AllDomain.Split(".") -join ",DC=")
+					$ldapPath = "LDAP://$DomainController/$TempDomainName"
+					$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry($ldapPath)
+				} else {
+					$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$AllDomain")
+				}
+				$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
+				$objSearcher.PageSize = 1000
+				$Computers += $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
+			}
+			
+			$Computers = $Computers | Sort-Object -Unique
+		}
 	}
 
 	$Computers = $Computers | Where-Object { $_ -and $_.trim() }
 	$HostFQDN = [System.Net.Dns]::GetHostByName(($env:computerName)).HostName
 	$TempHostname = $HostFQDN -replace '\..*', ''
 	$Computers = $Computers | Where-Object {$_ -ne "$HostFQDN" -and $_ -ne "$TempHostname"}
+	
+	Write-Output "[+] Testing Access..."
 	
 	# Create a runspace pool
 	$runspacePool = [runspacefactory]::CreateRunspacePool(1, 10)
