@@ -13,6 +13,9 @@ Find-LocalAdminAccess
 Find-LocalAdminAccess -Local -Username "Administrator" -Password "P@ssw0rd!"
 ```
 ```
+Find-LocalAdminAccess -Username "Administrator" -Password "P@ssw0rd!" -UserDomain ferrari.local
+```
+```
 Find-LocalAdminAccess -Domain ferrari.local -DomainController DC01.ferrari.local -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
 ```
 ![image](https://github.com/Leo4j/Find-LocalAdminAccess/assets/61951374/73705a97-5f67-446f-982d-f779421fc97b)
