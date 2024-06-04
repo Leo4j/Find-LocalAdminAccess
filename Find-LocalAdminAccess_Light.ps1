@@ -15,7 +15,7 @@ function Find-LocalAdminAccess {
 	Specify a comma-separated list of targets, or the path to a file containing targets (one per line)
 	
 	.PARAMETER Domain
-	Specify the target Domain
+	Specify the Domain to enumerate machine targets for
 
  	.PARAMETER DomainController
 	Specify the target DomainController
@@ -24,14 +24,18 @@ function Find-LocalAdminAccess {
 	Check for access as the Local Built-In Administrator
 	
 	.PARAMETER Username
-	Specify the Username for the Local Built-In Administrator
+	Specify the Username to check access as
 	
 	.PARAMETER Password
-	Specify the Password for the Local Built-In Administrator
+	Specify the Password for the Username you want to check access as
+	
+	.PARAMETER UserDomain
+	Specify the Domain for the Username you want to check access as
 	
 	.EXAMPLE
 	Find-LocalAdminAccess
 	Find-LocalAdminAccess -Local -Username "Administrator" -Password "P@ssw0rd!"
+	Find-LocalAdminAccess -Username "Administrator" -Password "P@ssw0rd!" -UserDomain ferrari.local
 	Find-LocalAdminAccess -Domain ferrari.local -DomainController DC01.ferrari.local -Targets "Workstation01.ferrari.local,DC01.ferrari.local"
  	#>
 	
@@ -41,6 +45,7 @@ function Find-LocalAdminAccess {
 		[string]$DomainController,
 		[string]$Username,
 		[string]$Password,
+		[string]$UserDomain,
 		[switch]$Local,
 		[switch]$ShowErrors
 	)
@@ -53,6 +58,20 @@ function Find-LocalAdminAccess {
 	if($Local -and (-not $Username -OR -not $Password)){
 		Write-Output ""
 		Write-Output "[-] Please provide Username and Password for the Local User Account"
+		Write-Output ""
+		return
+	}
+	
+	elseif (-not $Local -and (($Username -or $Password -or $UserDomain) -and (-not $Username -or -not $Password -or -not $UserDomain))) {
+		Write-Output ""
+		Write-Output "[-] Please provide Username, Password, and UserDomain"
+		Write-Output ""
+		return
+	}
+	
+	elseif ($Local -and $Username -and $Password -and $UserDomain){
+		Write-Output ""
+		Write-Output "[-] You cannot provide the Local switch together with UserDomain"
 		Write-Output ""
 		return
 	}
@@ -155,10 +174,10 @@ function Find-LocalAdminAccess {
 				break
 			}
 			
-			Write-Output ""
-			Write-Output "[+] Scope:"
-			foreach($AllDomain in $AllDomains){
-				Write-Output "$AllDomain"
+			else{
+				Write-Output ""
+				Write-Output "[+] Scope: $($AllDomains -join ", ")"
+
 			}
 			Write-Output ""
 			Write-Output "[+] Enumerating Targets..."
@@ -195,11 +214,7 @@ function Find-LocalAdminAccess {
 	$runspaces = New-Object System.Collections.ArrayList
 
 	$scriptBlock = {
-		param(
-			[string]$ComputerName,
-			[string]$UserName,
-			[string]$Password
-		)
+		param($ComputerName, $UserName, $Password, $UserDomain, $Local)
 
 		Function Test-Port {
 			param ($ComputerName, $Port)
@@ -326,7 +341,12 @@ public class Kernel32 {
 		}
 
 		# Impersonate User
-		Token-Impersonation -Username $UserName -Domain "." -Password $Password
+		if($Local -AND $Username -AND $Password){
+			Token-Impersonation -Username $UserName -Domain "." -Password $Password
+		}
+		elseif($Username -AND $Password -AND $UserDomain){
+			Token-Impersonation -Username $UserName -Domain $UserDomain -Password $Password
+		}
 
 		# SMB Check
 		if ($SMBPort) {
@@ -363,7 +383,7 @@ public class Kernel32 {
 		}
 
 		# Revert Token
-		Revert-Token
+		if(($Local -AND $Username -AND $Password) -OR ($Username -AND $Password -AND $UserDomain)){Revert-Token}
 
 		return @{
 			WMIAccess   = $WMIAccess
@@ -377,7 +397,7 @@ public class Kernel32 {
 		$ComputerName = "$computer"
 		
 		$runspace = [powershell]::Create().AddScript($scriptBlock).AddArgument($ComputerName)
-		$runspace = $runspace.AddArgument($UserName).AddArgument($Password)
+		$runspace = $runspace.AddArgument($UserName).AddArgument($Password).AddArgument($UserDomain).AddArgument($Local)
 		$runspace.RunspacePool = $runspacePool
 
 		[void]$runspaces.Add([PSCustomObject]@{
@@ -428,4 +448,86 @@ public class Kernel32 {
 	# Clean up
 	$runspacePool.Close()
 	$runspacePool.Dispose()
+}
+
+function FindDomainTrusts {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Domain,
+        [Parameter(Mandatory = $false)]
+        [string]$Server
+    )
+
+    # Define the TrustAttributes mapping
+    $TrustAttributesMapping = @{
+        [uint32]'0x00000001' = 'NON_TRANSITIVE'
+        [uint32]'0x00000002' = 'UPLEVEL_ONLY'
+        [uint32]'0x00000004' = 'FILTER_SIDS'
+        [uint32]'0x00000008' = 'FOREST_TRANSITIVE'
+        [uint32]'0x00000010' = 'CROSS_ORGANIZATION'
+        [uint32]'0x00000020' = 'WITHIN_FOREST'
+        [uint32]'0x00000040' = 'TREAT_AS_EXTERNAL'
+        [uint32]'0x00000080' = 'TRUST_USES_RC4_ENCRYPTION'
+        [uint32]'0x00000100' = 'TRUST_USES_AES_KEYS'
+        [uint32]'0x00000200' = 'CROSS_ORGANIZATION_NO_TGT_DELEGATION'
+        [uint32]'0x00000400' = 'PIM_TRUST'
+    }
+
+    try {
+        # Construct the LDAP path and create the DirectorySearcher
+        $ldapPath = if ($Server) { "LDAP://$Server/DC=$($Domain -replace '\.',',DC=')" } else { "LDAP://DC=$($Domain -replace '\.',',DC=')" }
+        $searcher = New-Object System.DirectoryServices.DirectorySearcher
+        $searcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry($ldapPath)
+        $searcher.Filter = "(objectClass=trustedDomain)"
+        $searcher.PropertiesToLoad.AddRange(@("name", "trustPartner", "trustDirection", "trustType", "trustAttributes", "whenCreated", "whenChanged"))
+        
+        # Execute the search
+        $results = $searcher.FindAll()
+
+        # Enumerate the results
+        foreach ($result in $results) {
+            # Resolve the trust direction
+            $Direction = Switch ($result.Properties["trustdirection"][0]) {
+                0 { 'Disabled' }
+                1 { 'Inbound' }
+                2 { 'Outbound' }
+                3 { 'Bidirectional' }
+            }
+
+            # Resolve the trust type
+            $TrustType = Switch ($result.Properties["trusttype"][0]) {
+                1 { 'WINDOWS_NON_ACTIVE_DIRECTORY' }
+                2 { 'WINDOWS_ACTIVE_DIRECTORY' }
+                3 { 'MIT' }
+            }
+
+            # Resolve the trust attributes
+            $TrustAttributes = @()
+            foreach ($key in $TrustAttributesMapping.Keys) {
+                if ($result.Properties["trustattributes"][0] -band $key) {
+                    $TrustAttributes += $TrustAttributesMapping[$key]
+                }
+            }
+
+            # Create and output the custom object
+            $trustInfo = New-Object PSObject -Property @{
+                SourceName      = $Domain
+                TargetName      = $result.Properties["trustPartner"][0]
+                TrustDirection  = $Direction
+                TrustType       = $TrustType
+                TrustAttributes = ($TrustAttributes -join ', ')
+                WhenCreated     = $result.Properties["whenCreated"][0]
+                WhenChanged     = $result.Properties["whenChanged"][0]
+            }
+
+            $trustInfo
+        }
+    }
+    catch {
+        Write-Error "An error occurred: $_"
+    }
+    finally {
+        $searcher.Dispose()
+        if ($results) { $results.Dispose() }
+    }
 }
