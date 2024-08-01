@@ -361,7 +361,7 @@ public class Kernel32 {
 		# WMI Check
 		if ($WMIPort) {
 			try {
-				Get-WmiObject -Class Win32_OperatingSystem -ComputerName $ComputerName -ErrorAction Stop
+				Get-CimInstance -Class Win32_OperatingSystem -ComputerName $ComputerName -ErrorAction Stop -OperationTimeoutSec 1
 				$WMIAccess = $True
 			} catch {
 				$WMIAccess = $False
