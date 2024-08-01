@@ -360,12 +360,11 @@ public class Kernel32 {
 
 		# WMI Check
 		if ($WMIPort) {
-			try {
-				Get-WmiObject -Class Win32_OperatingSystem -ComputerName $ComputerName -ErrorAction Stop
-				$WMIAccess = $True
-			} catch {
-				$WMIAccess = $False
-			}
+			$WMIJob = Get-WmiObject -Class Win32_OperatingSystem -ComputerName $ComputerName -ErrorAction Stop -AsJob
+			Wait-Job -ID $WMIJob.ID -Timeout 1
+			$os = Receive-Job $WMIJob.ID
+			if($os){$WMIAccess = $True}
+			else{$WMIAccess = $False}
 		}
 
 		# WinRM Check
