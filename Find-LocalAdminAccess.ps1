@@ -186,24 +186,54 @@ function Find-LocalAdminAccess {
 		}
 		
 		$Error.Clear()
+		$WMIJob = $null
+		if ($UserName -AND $Password) {
+			if ($Method -eq "WMI") {
+				$cred = New-Object System.Management.Automation.PSCredential ($UserName, ($Password | ConvertTo-SecureString -AsPlainText -Force))
+				$WMIJob = Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction SilentlyContinue -Credential $cred -AsJob
+			} elseif ($Method -eq "PSRemoting") {
+				Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction SilentlyContinue -Credential $cred
+			}
+		} elseif ($Method -eq "WMI") {
+			$WMIJob = Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction SilentlyContinue -AsJob
+		} elseif ($Method -eq "PSRemoting") {
+			Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction SilentlyContinue
+		} elseif ($Method -eq "SMB") {
+			ls \\$Computer\c$ -ErrorAction SilentlyContinue
+		}
 
-		if ($UserName -AND $Password -AND ($Method -eq "WMI")) {Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction SilentlyContinue -Credential $cred}
-  		elseif ($UserName -AND $Password -AND ($Method -eq "PSRemoting")) {Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction SilentlyContinue -Credential $cred}
-    		elseif ($Method -eq "WMI") {Get-WmiObject -Class Win32_OperatingSystem -ComputerName $Computer -ErrorAction SilentlyContinue}
-      		elseif ($Method -eq "PSRemoting") {Invoke-Command -ScriptBlock { hostname } -ComputerName $Computer -ErrorAction SilentlyContinue}
-		elseif ($Method -eq "SMB") {ls \\$Computer\c$ -ErrorAction SilentlyContinue}
-		if($error[0] -eq $null) {
-			return @{
-		    	Computer = $Computer
-		    	Success  = $true
+		if ($WMIJob) {
+			Wait-Job -ID $WMIJob.ID -Timeout 1
+			$os = Receive-Job $WMIJob.ID
+			if ($os) {
+				return @{
+					Computer = $Computer
+					Success  = $true
+				}
 			}
-	    } else {
-			return @{
-		    	Computer = $Computer
-		    	Success  = $false
-		    	Message  = $error[0].ToString()
+			else{
+				return @{
+					Computer = $Computer
+					Success  = $false
+					Message  = $error[0].ToString()
+				}
 			}
-	    }
+			#$null = Remove-Job -Job $WMIJob -Force
+		}
+		else{
+			if ($error[0] -eq $null) {
+				return @{
+					Computer = $Computer
+					Success  = $true
+				}
+			} else {
+				return @{
+					Computer = $Computer
+					Success  = $false
+					Message  = $error[0].ToString()
+				}
+			}
+		}
 	}
 
     	$runspacePool = [runspacefactory]::CreateRunspacePool(1, 10)
