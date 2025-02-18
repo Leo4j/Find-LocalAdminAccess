@@ -105,6 +105,8 @@ function Find-LocalAdminAccess {
 			}
 			$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
 			$objSearcher.PageSize = 1000
+   			$objSearcher.PropertiesToLoad.Clear()
+			$objSearcher.PropertiesToLoad.Add("dNSHostName")
 			$Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
 			$Computers = $Computers | Sort-Object -Unique
 		}
@@ -194,6 +196,8 @@ function Find-LocalAdminAccess {
 				}
 				$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
 				$objSearcher.PageSize = 1000
+    				$objSearcher.PropertiesToLoad.Clear()
+				$objSearcher.PropertiesToLoad.Add("dNSHostName")
 				$Computers += $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
 			}
 			
