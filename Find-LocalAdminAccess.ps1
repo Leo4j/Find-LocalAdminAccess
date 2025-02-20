@@ -103,6 +103,8 @@ function Find-LocalAdminAccess {
 			else{$objSearcher.SearchRoot = New-Object System.DirectoryServices.DirectoryEntry}
         	$objSearcher.Filter = "(&(sAMAccountType=805306369)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
         	$objSearcher.PageSize = 1000
+	 	$objSearcher.PropertiesToLoad.Clear() | Out-Null
+	 	$objSearcher.PropertiesToLoad.Add("dNSHostName") | Out-Null
         	$Computers = $objSearcher.FindAll() | ForEach-Object { $_.properties.dnshostname }
 		$Computers = $Computers | Sort-Object -Unique
     	}
